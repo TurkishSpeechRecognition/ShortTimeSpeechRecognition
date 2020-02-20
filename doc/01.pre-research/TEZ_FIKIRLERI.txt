@@ -1,0 +1,12 @@
+1. Türkçe / ingilizce aynı network öğrenme + metric diff --> ingilizcenin resource bollluğundan yaralanabilir miyiz?
+
+2. Türkçe /ingilizce aynı network autoencoder + metric diff --> word2vec gibi, anlam latent space vectorleri arasında bir correlation var mıdır?.
+
+3. GAN ile youtube türkçe sesli kitap kullanabilmek için :
+   3.1 Grapheme (or syllable) to phoneme allignment using linear techniques ( non-neural)
+   
+4. Syllable sesi kaydedilir, buradan GAN ile normal kelime ve nosile’li normal kelime üretilir (data bu şekilde augment edilir)
+
+5. Speech2Vec
+
+6. EEG 'den speech çıkarma.

@@ -1,0 +1,229 @@
+Creating an open speech recognition dataset for (almost) any language
+
+https://medium.com/@klintcho/creating-an-open-speech-recognition-dataset-for-almost-any-language-c532fb2bc0cf
+
+
+As state of the art algorithms and code are available almost immediately to anyone in the world at the same time, thanks to Arxiv, github and other open source initiatives. GPU deep learning training clusters can be spun up in minutes on AWS. What are companies competitive edge as AI and machine learning is getting more widely adopted in every domain?
+
+The answer is of course data, and in particular cleaned and annotated data. This type of data is either difficult to get a hold of, very expensive or both. Which is why many people are calling data, the new gold.
+
+So for this post I’m going to walk through how to easily create a speech recognition dataset for (almost) any language, bootstrapped. Which for instance can be used to train a Baidu Deep Speech model in Tensorflow for any type of speech recognition task.
+
+For english there are already a bunch of readily available datasets. For instance the LibriSpeech ASR corpus, which is 1000 hours of spoken english (created in similar fashion as described in this post).
+
+Mozilla also has an initiative for crowdsourcing this data to create an open dataset as well https://voice.mozilla.org/data
+Introduction
+
+We’ll create a dataset for Swedish, but this bootstrap technique can be applied to almost any latin language.
+
+Using free audiobooks, with permissive licences or audiobooks that are in the public domain together with e-books for these books to create our datasets.
+
+
+The process will include preprocessing of both the audio and the ebook text, aligning the text sentences and the spoken sentences, called forced alignment. We’ll use Aeneas to do the forced aligment which is an awesome python library and command line tool.
+
+The last step will include some manual work to finetune and correct the audiosamples using a very simple web ui. This postprocessing and tuning will also involve transforming our final audio and text output map to the proper training format for the Tensorflow deep speech model.
+Downloading and preprocessing audio books
+
+Go to Librivox where there are bunch of audio books in different languages.
+
+26 books in total are available in Swedish. We started out with the book “Göteborgsflickor” and downloaded the full audio book as a zip-file. The Librivox files are divided into chapters and the zip-file contains one .mp3 file per chapter, in this books case one per short story.
+
+The first chapter audio-file needs some editing to better conform to the ebook text. This is done to get better result from the forced alignment. The audio should in theory exactly match the text. This is an important step as
+
+To cut some of the audio from the beginning of the file I use Audacity for Mac which is completely free.
+
+Open the file in Audacity.
+Audacity, first chapter of the book.
+
+Click play and listen to where the actual reading starts, you might want to glimpse at the ebook to see how and where the book starts.
+Select and delete, to start the audio clip where the actual book starts.
+
+I marked from the place where it started, from around 25 seconds in, and selected everything from that moment to the beginning, and deleted it using backspace for Mac.
+
+To get a better more detailed view of where it starts, use the zoom + button in the toolbar menu.
+Zoom for easier editing.
+
+When you are happy with your Audio editing and it’s identical to the ebook text for that chapter, go export the clip to mp3:
+Export as a clean mp3, audio starts and finishes as the ebook text.
+
+You probably need to download LAME for Mac to export to mp3.
+
+That is it for the Audio part!
+Downloading and preprocessing the E-books
+
+To get the free ebook we’ll go to another amazing open source effort, Project Guthenberg, for “Göteborgsflickor”. Download the .txt file.
+
+We need to transform the raw text file to get to the Aeneas text input format described here (https://www.readbeyond.it/aeneas/docs/textfile.html#aeneas.textfile.TextFileFormat.MPLAIN)
+
+
+
+We used NLTK for this, mostly because the NLTK sentence splitter is regex based and no language specific model is needed, and the english one works fairly well for other latin languages.
+
+To load the first chapter of the ebook and split it up into paragraphs and sentences:
+
+
+
+# load nltk
+from nltk.tokenize import sent_tokenize# load text from 1st chapter
+with open('books/18043-0.txt', 'r') as f: 
+    data = f.read()
+    
+    
+    
+We examined the ebook, and it contained clearly defined paragraph using 2 newline characters “\n\n” . The Aeneas text input format also makes use of paragraphs, so we decided use the ebook paragraphs as well:
+
+paragraphs = data.split(“\n\n”)
+
+Now brace yourself for some ugly code. Cleaning of some special characters and the actual sentence splitting using NLTK as well as adding the sentences to the paragraph lists:
+
+
+paragraph_sentence_list = []
+for paragraph in paragraphs:
+    paragraph = paragraph.replace(“\n”, “ “)
+    paragraph = paragraph.replace(“ — “, “”)
+    paragraph = re.sub(r’[^a-zA-Z0–9_*.,?!åäöèÅÄÖÈÉçëË]’, ‘ ‘,    paragraph)
+    paragraph_sentence_list.append(sent_tokenize(paragraph))
+
+
+Meaning we will have a list of lists, which contains around 900 paragraphs, and each paragraph contains all sentences in that paragraph.
+
+Save the list of lists to the proper output format for Aeneas:
+
+text = “”
+count = 0
+for paragraph in paragraph_sentence_list:
+    if “ “.join(paragraph).isupper():
+    with open(“books/18043–0_aeneas_data_”+str(count)+”.txt”, “w”) as fw:
+         fw.write(text)
+    text = “”
+    count += 1
+    text += “\n”.join(paragraph)
+    text += “\n\n”
+ elif “End of the Project Gutenberg EBook” in “ “.join(paragraph):
+     break
+ else:
+     text += “\n”.join(paragraph)
+     text += “\n\n”
+
+In simple terms, loop through the paragraphs, join all sentences in these with a new line (“\n”) character. Add the 2 new line characters (“\n\n”) for each paragraph, to get an extra new line between the paragraphs.
+The chapters in this book was in all uppercase, which is why we check for a sentence with all upper case to save the output to one file for that chapter. In the end we will end up with the same number of text-files as we have audiofiles, one per chapter.
+
+The end result of this will look something like this:
+
+
+
+On to the fun part, forced alignment!
+Forced alignment using Aeneas
+
+Aeneas can be run from the command line or as a Python module. We decided to use it as module to be able to extend it to any future automation of the task.
+
+Import the Aeneas module and methods.
+
+from aeneas.executetask import ExecuteTask
+from aeneas.task import Task
+
+Create the task objects that holds all relevant configurations.
+
+# create Task object
+config_string = ”task_language=swe|is_text_type=plain|os_task_file_format=json”
+task = Task(config_string=config_string)task.audio_file_path_absolute = “books/18043–0/goteborgsflickor_01_stroemberg_64kb_clean.mp3”task.text_file_path_absolute = “books/18043–0_aeneas_data_1.txt”task.sync_map_file_path_absolute = “books/18043–0_output/syncmap.json”
+
+First create the config string, pretty straight forward, define language, “swe” for Swedish, the type for the input text format is plain or mplain. Finally JSON as our output sync map format.
+
+Next we define the audio file, the text file corresponding to the audio file and what we want our output sync map to be named when its saved, in this case just syncmap.json.
+
+To run it:
+
+# process Task
+ExecuteTask(task).execute()# output sync map to file
+task.output_sync_map_file()
+
+For this sample/chapter it took less than 1–2 seconds to run, so it should be pretty fast.
+
+Awesome! We should now have a audio/ebook Aeneas syncmap:
+Aeneas outputted syncmap in JSON
+
+Next step means fine-tuning and validating the syncmap.
+Validating and fine tuning Aeneas sync maps
+
+There is a very simple web interface created for Aeneas to load the syncmap and the audio file and make it easy to fine tune the sentence end and start time stamps.
+
+Download or clone the finetuneas repository. Open finetuneas.html in Chrome to start the finetuning.
+Finetuneas interface.
+
+Select your audio file for the first chapter and the outputted syncmap JSON file for the same chapter.
+Loaded syncmap and audio in Finetuneas web interface.
+
+On the right pane, you will see the start timestamp, and a “+” and “-” sign for adjusting the start and end time. Beware that the end time for a audio clip is the next sentence start time which is a bit confusing.
+
+Click the text to play the section of interest. Adjust and finetune the start and end timestamps if necessary. When done, save the finetuned syncmap using the the controls in the left pane.
+
+When the finetuning is done it’s time to do the final post processing to transform the dataset into a simple format which can be used to train the Deep Speech model.
+Convert to DeepSpeech training data format
+
+The last step is to convert the data into a format which can be easily used. We used the same format Mozilla uses at https://voice.mozilla.org/data. It is also a common practice and format to use CSV referencing media files (text, images and audio) to train machine learning models in general.
+
+Basically a CSV file looking like this:
+The final CSV datafile.
+
+Each audio-file will contain one sentence, and one row per sentence. There are some other attributes that are optional and added if possible, in this case only gender is known.
+
+Upvotes and downvotes are metrics for whenever people are validating a sentence as a good sample or not.
+
+We’ll use a library called pydub to do some simple slicing of the audio files, create a pandas dataframe and save it to a CSV.
+
+from pydub import AudioSegment
+import pandas as pd
+import jsonbook = AudioSegment.from_mp3("books/18043-0/goteborgsflickor_01_stroemberg_64kb_clean.mp3")with open("books/18043-0_output/syncmap.json") as f: 
+    syncmap = json.loads(f.read())
+
+Load the audio and the syncmap you created previously.
+
+sentences = []
+for fragment in syncmap[‘fragments’]:
+    if ((float(fragment[‘end’])*1000) — float(fragment[‘begin’])*1000) > 400:
+ sentences.append({“audio”:book[float(fragment[‘begin’])*1000:float(fragment[‘end’])*1000], “text”:fragment[‘lines’][0]})
+
+Loop through all the segments/fragments/sentences in the syncmap. Do a sanity check that they are more than 400 milliseconds long. Pydub works in milliseconds, and the syncmap defines all beginnings and ends in seconds, which is why we need to multiply everything with a 1000.
+
+A placeholder dataframe is created:
+
+df = pd.DataFrame(columns=[‘filename’,’text’,’up_votes’,’down_votes’,’age’,’gender’,’accent’,’duration’])
+
+Append the sliced pydub audio object and the text for that fragment to an object in an array.
+
+# export audio segment
+for idx, sentence in enumerate(sentences):
+    text = sentence[‘text’].lower()
+      sentence[‘audio’].export(“books/audio_output/sample-”+str(idx)+”.mp3", format=”mp3")
+ temp_df = pd.DataFrame([{‘filename’:”sample-”+str(idx)+”.mp3",’text’:text,’up_votes’:0,’down_votes’:0,’age’:0,’gender’:”male”,’accent’:’’,’duration’:’’}], columns=[‘filename’,’text’,’up_votes’,’down_votes’,’age’,’gender’,’accent’,’duration’])
+ df = df.append(temp_df)
+
+Lowercasing all text, normalizing it. Next we export the saved audio object with a new name.
+
+Save the new audio filename and the text to the temporary Dataframe and append it to the placeholder Dataframe.
+
+Take a look a the Dataframe to make sure it looks sane:
+
+df.head()
+
+Finally save it as a CSV:
+
+df.to_csv(“books/sample.csv”,index=False)
+
+That is it! Of course this is just for one chapter in one book, you will need to iterate for each chapter in each book. We would recommend to try to get to around 150–200 hours of training data at least to get a good model off the ground.
+
+Notebooks for many of the things I’ve gone through in this post are available in the repo below.
+
+https://github.com/klintan/swedish-asr-dataset
+
+
+
+Thanks to Norah Klintberg Sakal for helping out on this project.
+
+
+
+
+
+
+
