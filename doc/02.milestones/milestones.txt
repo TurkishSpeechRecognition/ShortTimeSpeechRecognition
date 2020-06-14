@@ -1,8 +1,0 @@
-./0.SoundRecording
-./1.AudioBook_DeepLearningParser
-./1.AudioBook_DeepLearningParser/0.UsingSyllables
-./1.AudioBook_DeepLearningParser/2.UsingWords
-./1.AudioBook_DeepLearningParser/1.UsingLetters
-./3.TextToSpeech
-./2.SpeechToText
-

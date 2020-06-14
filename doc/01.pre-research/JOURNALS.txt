@@ -1,8 +1,0 @@
-https://www.journals.elsevier.com/computer-speech-and-language
-speech recognition ieee : 
-   2012 Fourth International Conference on Computational and Information Sciences
-   2015 CHILEAN Conference on Electrical, Electronics Engineering, Information and Communication Technologies (CHILECON)
-   IEEE Access
-   IEEE Acoustics, Speech, and Signal Processing Newsletter ( Volume: 57 , Issue: 1 , March 1982 )
-   IEEE Transactions on Audio Speech and Language Processing (IEEE T AUDIO SPEECH)
-
